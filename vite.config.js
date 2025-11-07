@@ -13,7 +13,7 @@ export default defineConfig({
       "@": resolve(__dirname, "./src"),
     },
   },
-  base: '/',
+  base: '/claudeMiniBuildAThon/',
   build: {
     outDir,
     emptyOutDir: true,

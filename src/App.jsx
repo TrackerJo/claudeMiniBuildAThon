@@ -1,56 +1,52 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Ghost, Square, Circle, Trophy, Timer, Skull } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Ghost, Trophy, Timer } from 'lucide-react';
 
 const HauntedMazeGame = () => {
-  const PLAYER_SIZE = 30;
-  const GHOST_SIZE = 35;
+  const PLAYER_SIZE = 25;
+  const GHOST_SIZE = 30;
   const MOVE_SPEED = 5;
   const GHOST_SPEED = 3;
+  const WALL_THICKNESS = 5;
+  const PATH_HEIGHT = 50;
   
-  // Maze walls (x, y, width, height)
+  // Simpler, smaller maze - easier to win
   const walls = [
-    // Top section
-    { x: 70, y: 75, width: 320, height: 5 },
-    { x: 445, y: 75, width: 420, height: 5 },
-    { x: 865, y: 80, width: 5, height: 50 },
-    
-    // Second row
-    { x: 25, y: 130, width: 260, height: 5 },
-    { x: 330, y: 130, width: 5, height: 50 },
-    { x: 445, y: 130, width: 420, height: 5 },
-    
-    // Third row
-    { x: 25, y: 180, width: 225, height: 5 },
-    
-    // Fourth row
-    { x: 25, y: 230, width: 225, height: 5 },
-    { x: 335, y: 230, width: 5, height: 60 },
-    { x: 340, y: 235, width: 575, height: 5 },
-    
-    // Fifth row
-    { x: 145, y: 285, width: 5, height: 90 },
-    { x: 205, y: 285, width: 650, height: 5 },
-    
-    // Sixth row
-    { x: 25, y: 340, width: 825, height: 5 },
-    { x: 785, y: 345, width: 5, height: 60 },
-    
-    // Bottom section
-    { x: 25, y: 485, width: 705, height: 5 },
-    { x: 725, y: 490, width: 5, height: 50 },
-    { x: 25, y: 535, width: 655, height: 5 },
-    { x: 785, y: 540, width: 135, height: 5 },
-    
     // Outer walls
-    { x: 20, y: 20, width: 880, height: 5 }, // top
-    { x: 20, y: 20, width: 5, height: 600 }, // left
-    { x: 895, y: 20, width: 5, height: 600 }, // right
-    { x: 20, y: 615, width: 880, height: 5 }, // bottom
+    { x: 25, y: 10, width: 595, height: WALL_THICKNESS }, // top
+    { x: 25, y: 10, width: WALL_THICKNESS, height: 420 }, // left
+    { x: 615, y: 10, width: WALL_THICKNESS, height: 420 }, // right
+    { x: 25, y: 425, width: 595, height: WALL_THICKNESS }, // bottom
+    
+    // Row 1 - top section (2 segments with 1 gap)
+    { x: 25, y: 75, width: 200, height: WALL_THICKNESS },
+    { x: 325, y: 75, width: 295, height: WALL_THICKNESS },
+    
+    // Row 2
+    { x: 25, y: 140, width: 150, height: WALL_THICKNESS },
+    { x: 275, y: 140, width: 345, height: WALL_THICKNESS },
+    
+    // Row 3
+    { x: 25, y: 205, width: 200, height: WALL_THICKNESS },
+    { x: 325, y: 205, width: 295, height: WALL_THICKNESS },
+    
+    // Row 4
+    { x: 25, y: 270, width: 150, height: WALL_THICKNESS },
+    { x: 275, y: 270, width: 345, height: WALL_THICKNESS },
+    
+    // Row 5 (bottom)
+    { x: 25, y: 335, width: 200, height: WALL_THICKNESS },
+    { x: 325, y: 335, width: 295, height: WALL_THICKNESS },
+    
+    // Vertical walls - passages
+    { x: 225, y: 80, width: WALL_THICKNESS, height: 55 },
+    { x: 175, y: 145, width: WALL_THICKNESS, height: 55 },
+    { x: 225, y: 210, width: WALL_THICKNESS, height: 55 },
+    { x: 175, y: 275, width: WALL_THICKNESS, height: 55 },
   ];
 
-  const [player1, setPlayer1] = useState({ x: 55, y: 155, canMoveHorizontal: true });
-  const [player2, setPlayer2] = useState({ x: 55, y: 590, canMoveHorizontal: false });
-  const [ghost, setGhost] = useState({ x: 180, y: 510, vx: GHOST_SPEED, vy: GHOST_SPEED });
+  const [player1, setPlayer1] = useState({ x: 45, y: 380, canMoveHorizontal: true });
+  const [player2, setPlayer2] = useState({ x: 580, y: 380, canMoveHorizontal: false });
+  const [ghost, setGhost] = useState({ x: 180, y: 350, vx: GHOST_SPEED, vy: GHOST_SPEED });
   const [keys, setKeys] = useState({});
   const [gameStarted, setGameStarted] = useState(false);
   const [gameEnded, setGameEnded] = useState(false);
@@ -58,8 +54,9 @@ const HauntedMazeGame = () => {
   const [elapsedTime, setElapsedTime] = useState(0);
   const [ghostTouches, setGhostTouches] = useState(0);
   const [finalScore, setFinalScore] = useState(null);
+  const [lastGhostTouch, setLastGhostTouch] = useState({ p1: 0, p2: 0 });
 
-  const endZone = { x: 790, y: 30, width: 100, height: 50 };
+  const endZone = { x: 495, y: 25, width: 110, height: 45 };
 
   const checkCollision = (rect1, rect2) => {
     return rect1.x < rect2.x + rect2.width &&
@@ -86,9 +83,15 @@ const HauntedMazeGame = () => {
 
   useEffect(() => {
     const handleKeyDown = (e) => {
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'w', 'a', 's', 'd', 'W', 'A', 'S', 'D'].includes(e.key)) {
+        e.preventDefault();
+      }
       setKeys(prev => ({ ...prev, [e.key]: true }));
     };
     const handleKeyUp = (e) => {
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'w', 'a', 's', 'd', 'W', 'A', 'S', 'D'].includes(e.key)) {
+        e.preventDefault();
+      }
       setKeys(prev => ({ ...prev, [e.key]: false }));
     };
 
@@ -104,7 +107,6 @@ const HauntedMazeGame = () => {
     if (!gameStarted || gameEnded) return;
 
     const gameLoop = setInterval(() => {
-      // Update timer
       setElapsedTime(Date.now() - startTime);
 
       // Move players
@@ -146,7 +148,7 @@ const HauntedMazeGame = () => {
         return { ...prev, x: newX, y: newY };
       });
 
-      // Check player collision and push
+      // Check player collision and push - both players can push each other
       setPlayer1(p1 => {
         setPlayer2(p2 => {
           if (checkCollision(
@@ -161,11 +163,18 @@ const HauntedMazeGame = () => {
               const pushX = (dx / distance) * 3;
               const pushY = (dy / distance) * 3;
               
+              // Player 1 pushes Player 2
               const newP2X = p2.x + pushX;
               const newP2Y = p2.y + pushY;
-              
               if (!checkWallCollision(newP2X, newP2Y, PLAYER_SIZE)) {
                 setPlayer2(prev => ({ ...prev, x: newP2X, y: newP2Y }));
+              }
+              
+              // Player 2 pushes Player 1 (opposite direction)
+              const newP1X = p1.x - pushX;
+              const newP1Y = p1.y - pushY;
+              if (!checkWallCollision(newP1X, newP1Y, PLAYER_SIZE)) {
+                setPlayer1(prev => ({ ...prev, x: newP1X, y: newP1Y }));
               }
             }
           }
@@ -181,11 +190,11 @@ const HauntedMazeGame = () => {
         let newVx = prev.vx;
         let newVy = prev.vy;
 
-        if (newX < 25 || newX > 895 - GHOST_SIZE) {
+        if (newX < 30 || newX > 610 - GHOST_SIZE) {
           newVx = -prev.vx;
           newX = prev.x + newVx;
         }
-        if (newY < 25 || newY > 615 - GHOST_SIZE) {
+        if (newY < 15 || newY > 425 - GHOST_SIZE) {
           newVy = -prev.vy;
           newY = prev.y + newVy;
         }
@@ -193,25 +202,32 @@ const HauntedMazeGame = () => {
         return { x: newX, y: newY, vx: newVx, vy: newVy };
       });
 
-      // Check ghost collision with players
+      // Check ghost collision with players - only switch once per collision
+      const currentTime = Date.now();
       setGhost(g => {
         setPlayer1(p1 => {
-          if (checkCollision(
+          const isColliding = checkCollision(
             { x: g.x, y: g.y, width: GHOST_SIZE, height: GHOST_SIZE },
             { x: p1.x, y: p1.y, width: PLAYER_SIZE, height: PLAYER_SIZE }
-          )) {
+          );
+          
+          if (isColliding && currentTime - lastGhostTouch.p1 > 1000) {
             setGhostTouches(prev => prev + 1);
+            setLastGhostTouch(prev => ({ ...prev, p1: currentTime }));
             return { ...p1, canMoveHorizontal: !p1.canMoveHorizontal };
           }
           return p1;
         });
 
         setPlayer2(p2 => {
-          if (checkCollision(
+          const isColliding = checkCollision(
             { x: g.x, y: g.y, width: GHOST_SIZE, height: GHOST_SIZE },
             { x: p2.x, y: p2.y, width: PLAYER_SIZE, height: PLAYER_SIZE }
-          )) {
+          );
+          
+          if (isColliding && currentTime - lastGhostTouch.p2 > 1000) {
             setGhostTouches(prev => prev + 1);
+            setLastGhostTouch(prev => ({ ...prev, p2: currentTime }));
             return { ...p2, canMoveHorizontal: !p2.canMoveHorizontal };
           }
           return p2;
@@ -245,9 +261,10 @@ const HauntedMazeGame = () => {
     setElapsedTime(0);
     setGhostTouches(0);
     setFinalScore(null);
-    setPlayer1({ x: 55, y: 155, canMoveHorizontal: true });
-    setPlayer2({ x: 55, y: 590, canMoveHorizontal: false });
-    setGhost({ x: 180, y: 510, vx: GHOST_SPEED, vy: GHOST_SPEED });
+    setLastGhostTouch({ p1: 0, p2: 0 });
+    setPlayer1({ x: 45, y: 380, canMoveHorizontal: true });
+    setPlayer2({ x: 580, y: 380, canMoveHorizontal: false });
+    setGhost({ x: 180, y: 350, vx: GHOST_SPEED, vy: GHOST_SPEED });
   };
 
   const formatTime = (ms) => {
@@ -258,9 +275,7 @@ const HauntedMazeGame = () => {
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-purple-900 via-indigo-900 to-black p-8">
       <div className="mb-6 text-center">
         <h1 className="text-5xl font-bold text-orange-400 mb-2 flex items-center justify-center gap-3">
-          <Ghost className="w-12 h-12" />
-          Haunted House Escape
-          <Skull className="w-12 h-12" />
+          👻 Haunted House Escape 🎃
         </h1>
         <p className="text-gray-300 text-lg">Two players, one goal: escape together!</p>
       </div>
@@ -284,7 +299,7 @@ const HauntedMazeGame = () => {
         </div>
       </div>
 
-      <div className="relative bg-gray-700 rounded-lg shadow-2xl" style={{ width: '920px', height: '640px' }}>
+      <div className="relative bg-gray-700 rounded-lg shadow-2xl" style={{ width: '645px', height: '440px' }}>
         {/* Maze walls */}
         {walls.map((wall, i) => (
           <div
@@ -301,7 +316,7 @@ const HauntedMazeGame = () => {
 
         {/* End zone */}
         <div
-          className="absolute bg-green-500 opacity-50 flex items-center justify-center text-black font-bold text-sm"
+          className="absolute bg-green-500 flex items-center justify-center text-black font-bold text-sm"
           style={{
             left: endZone.x,
             top: endZone.y,
@@ -312,13 +327,16 @@ const HauntedMazeGame = () => {
           ESCAPE! →
         </div>
 
-        {/* Spider webs decoration */}
-        <div className="absolute text-4xl" style={{ right: '50px', top: '150px' }}>🕸️</div>
-        <div className="absolute text-3xl" style={{ right: '150px', top: '250px' }}>🕸️</div>
+        {/* Decorations */}
+        <div className="absolute text-3xl" style={{ left: '100px', top: '25px' }}>🎃</div>
+        <div className="absolute text-3xl" style={{ right: '60px', top: '100px' }}>🕸️</div>
+        <div className="absolute text-4xl" style={{ left: '90px', top: '200px' }}>👻</div>
+        <div className="absolute text-3xl" style={{ right: '80px', top: '280px' }}>💀</div>
+        <div className="absolute text-2xl" style={{ right: '60px', top: '400px' }}>🐱</div>
 
-        {/* Player 1 (Square) */}
+        {/* Player 1 (Orange - Pumpkin emoji) */}
         <div
-          className="absolute bg-orange-500 rounded flex items-center justify-center transition-all duration-75"
+          className="absolute bg-orange-500 rounded-lg flex items-center justify-center transition-all duration-75 text-2xl border-2 border-orange-700"
           style={{
             left: player1.x,
             top: player1.y,
@@ -326,12 +344,12 @@ const HauntedMazeGame = () => {
             height: PLAYER_SIZE,
           }}
         >
-          <Square className="w-5 h-5 text-white" />
+          🎃
         </div>
 
-        {/* Player 2 (Circle) */}
+        {/* Player 2 (Green - Different emoji) */}
         <div
-          className="absolute bg-cyan-500 rounded-full flex items-center justify-center transition-all duration-75"
+          className="absolute bg-green-500 rounded-lg flex items-center justify-center transition-all duration-75 text-2xl border-2 border-green-700"
           style={{
             left: player2.x,
             top: player2.y,
@@ -339,7 +357,7 @@ const HauntedMazeGame = () => {
             height: PLAYER_SIZE,
           }}
         >
-          <Circle className="w-5 h-5 text-white fill-white" />
+          👤
         </div>
 
         {/* Ghost */}
@@ -376,15 +394,16 @@ const HauntedMazeGame = () => {
 
         {/* Start overlay */}
         {!gameStarted && (
-          <div className="absolute inset-0 bg-black bg-opacity-80 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black bg-opacity-90 flex items-center justify-center">
             <div className="bg-gray-800 p-8 rounded-lg text-center max-w-2xl">
               <Ghost className="w-16 h-16 text-purple-400 mx-auto mb-4 animate-bounce" />
               <h2 className="text-3xl font-bold text-orange-400 mb-4">How to Play</h2>
               <div className="text-white text-left space-y-2 mb-6">
-                <p>🟧 <strong>Player 1 (Orange Square):</strong> WASD keys</p>
-                <p>🔵 <strong>Player 2 (Cyan Circle):</strong> Arrow keys</p>
+                <p>🎃 <strong>Player 1 (Orange Pumpkin):</strong> WASD keys - moves LEFT/RIGHT only</p>
+                <p>👤 <strong>Player 2 (Green Player):</strong> Arrow keys - moves UP/DOWN only</p>
+                <p>🤝 <strong>Teamwork:</strong> Push each other to navigate the maze!</p>
                 <p>👻 <strong>Ghost:</strong> Switches your movement when it touches you!</p>
-                <p>🎯 <strong>Goal:</strong> Both players reach the green escape zone</p>
+                <p>🎯 <strong>Goal:</strong> Both players reach the green ESCAPE zone</p>
                 <p>📊 <strong>Score:</strong> Time × 1000 + Ghost touches × 500 (lower is better!)</p>
               </div>
               <button
@@ -401,20 +420,20 @@ const HauntedMazeGame = () => {
       <div className="mt-6 grid grid-cols-2 gap-8 text-white max-w-2xl">
         <div className="bg-gray-800 p-4 rounded-lg">
           <div className="flex items-center gap-2 mb-2">
-            <div className="w-6 h-6 bg-orange-500 rounded"></div>
-            <h3 className="font-bold text-lg">Player 1 (Square)</h3>
+            <div className="w-6 h-6 bg-orange-500 rounded text-center">🎃</div>
+            <h3 className="font-bold text-lg">Player 1 (Pumpkin)</h3>
           </div>
           <p className="text-sm text-gray-300">
-            {player1.canMoveHorizontal ? '← → Horizontal (A/D)' : '↑ ↓ Vertical (W/S)'}
+            {player1.canMoveHorizontal ? '← → Horizontal ONLY (A/D)' : '↑ ↓ Vertical ONLY (W/S)'}
           </p>
         </div>
         <div className="bg-gray-800 p-4 rounded-lg">
           <div className="flex items-center gap-2 mb-2">
-            <div className="w-6 h-6 bg-cyan-500 rounded-full"></div>
-            <h3 className="font-bold text-lg">Player 2 (Circle)</h3>
+            <div className="w-6 h-6 bg-green-500 rounded text-center">👤</div>
+            <h3 className="font-bold text-lg">Player 2 (Green)</h3>
           </div>
           <p className="text-sm text-gray-300">
-            {player2.canMoveHorizontal ? '← → Horizontal (Arrows)' : '↑ ↓ Vertical (Arrows)'}
+            {player2.canMoveHorizontal ? '← → Horizontal ONLY (Arrows)' : '↑ ↓ Vertical ONLY (Arrows)'}
           </p>
         </div>
       </div>
